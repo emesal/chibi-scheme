@@ -886,18 +886,19 @@ static sexp analyze_set (sexp ctx, sexp x, int depth) {
 #define sexp_return(res, val) do {res=val; goto cleanup;} while (0)
 
 static sexp analyze_lambda (sexp ctx, sexp x, int depth) {
-  int trailing_non_procs, verify_duplicates_p;
+  int trailing_non_procs;
   sexp name, ls, ctx3;
   sexp_gc_var6(res, body, tmp, value, defs, ctx2);
   sexp_gc_preserve6(ctx, res, body, tmp, value, defs, ctx2);
   /* verify syntax */
   if (! (sexp_pairp(sexp_cdr(x)) && sexp_pairp(sexp_cddr(x))))
     sexp_return(res, sexp_compile_error(ctx, "bad lambda syntax", x));
-  verify_duplicates_p = sexp_length_unboxed(sexp_cadr(x)) < 100;
+  /* tein: H8 — removed 100-param threshold that silently disabled duplicate
+   * checking. O(n^2) memq is fine; nobody has 100+ params in practice. */
   for (ls=sexp_cadr(x); sexp_pairp(ls); ls=sexp_cdr(ls))
     if (! sexp_idp(sexp_car(ls)))
       sexp_return(res, sexp_compile_error(ctx, "non-symbol parameter", x));
-    else if (verify_duplicates_p && sexp_truep(sexp_memq(ctx, sexp_car(ls), sexp_cdr(ls))))
+    else if (sexp_truep(sexp_memq(ctx, sexp_car(ls), sexp_cdr(ls))))
       sexp_return(res, sexp_compile_error(ctx, "duplicate parameter", x));
   if (! sexp_nullp(ls)) { /* verify rest param */
     if (! sexp_idp(ls))
@@ -2711,6 +2712,10 @@ sexp sexp_env_import_op (sexp ctx, sexp self, sexp_sint_t n, sexp to, sexp from,
   if (! sexp_envp(from)) from = sexp_context_env(ctx);
   /* create an empty imports env frame */
   value = sexp_make_env(ctx);
+  if (sexp_exceptionp(value)) {     /* tein: H7 OOM guard */
+    sexp_gc_release3(ctx);
+    return value;
+  }
   sexp_env_parent(value) = sexp_env_parent(to);
   sexp_env_parent(to) = value;
   sexp_env_lambda(value) = sexp_env_lambda(to);
@@ -2757,6 +2762,10 @@ sexp sexp_env_import_op (sexp ctx, sexp self, sexp_sint_t n, sexp to, sexp from,
   }
   /* create a new empty frame for future defines */
   value = sexp_make_env(ctx);
+  if (sexp_exceptionp(value)) {     /* tein: H7 OOM guard */
+    sexp_gc_release3(ctx);
+    return value;
+  }
   sexp_env_parent(value) = sexp_env_parent(to);
   sexp_env_lambda(value) = sexp_env_lambda(to);
   sexp_env_bindings(value) = sexp_env_bindings(to);
