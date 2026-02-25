@@ -269,6 +269,7 @@ sexp_uint_t sexp_bignum_fxdiv (sexp ctx, sexp a, sexp_uint_t b, int offset) {
   sexp_uint_t len=sexp_bignum_hi(a), *data=sexp_bignum_data(a), q, r=0;
   int i;
   sexp_luint_t n = luint_from_uint(0);
+  if (b == 0) return 0;             /* tein: H12 divide-by-zero guard */
   for (i=len-1; i>=offset; i--) {
     n = luint_add(luint_shl(n,  sizeof(sexp_uint_t)*8), luint_from_uint(data[i]));
     q = luint_to_uint(luint_div_uint(n, b));
