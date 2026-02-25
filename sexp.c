@@ -2622,6 +2622,14 @@ sexp sexp_read_string (sexp ctx, sexp in, int sentinel) {
 #if SEXP_USE_UTF8_STRINGS
           if ((unsigned)c > 0x80) {
             len = sexp_utf8_char_byte_count(c);
+            if (i + len >= size) {
+              tmp = (char*) sexp_malloc(size*2);
+              if (!tmp) {res = sexp_global(ctx, SEXP_G_OOM_ERROR); break;}
+              memcpy(tmp, buf, i);
+              if (size != INIT_STRING_BUFFER_SIZE) free(buf);
+              buf = tmp;
+              size *= 2;
+            }
             sexp_utf8_encode_char((unsigned char*)buf + i, len, c);
             i += len;
             goto maybe_expand;
@@ -3647,6 +3655,7 @@ sexp sexp_read_raw (sexp ctx, sexp in, sexp *shares) {
       tmp = sexp_make_fixnum(c2);
       if (c1 == '#') {
         if (!sexp_vectorp(*shares) ||
+            c2 >= (int)sexp_vector_length(*shares) - 1 ||
             tmp > sexp_vector_data(*shares)[sexp_vector_length(*shares)-1] ||
             sexp_vector_data(*shares)[c2] == SEXP_VOID) {
           res = sexp_read_error(ctx, "unknown reader label", tmp, in);
@@ -3663,11 +3672,15 @@ sexp sexp_read_raw (sexp ctx, sexp in, sexp *shares) {
                         sexp_make_fixnum(16))) {
           res = sexp_read_error(ctx, "reader label out of order", tmp, in);
         } else {
-          if (c2 + 1 >= (int)sexp_vector_length(*shares)) {
+          while (c2 + 1 >= (int)sexp_vector_length(*shares)) {
             tmp2 = sexp_make_vector(ctx, sexp_make_fixnum(sexp_vector_length(*shares)*2), SEXP_VOID);
+            if (sexp_exceptionp(tmp2)) {res = tmp2; break;}
             memcpy(sexp_vector_data(tmp2), sexp_vector_data(*shares), (sexp_vector_length(*shares)-1)*sizeof(sexp));
+            sexp_vector_data(tmp2)[sexp_vector_length(tmp2)-1]
+              = sexp_vector_data(*shares)[sexp_vector_length(*shares)-1];
             *shares = tmp2;
           }
+          if (sexp_exceptionp(res)) break;
           sexp_vector_data(*shares)[c2] = sexp_make_reader_label(c2);
           if (tmp > sexp_vector_data(*shares)[sexp_vector_length(*shares)-1])
             sexp_vector_data(*shares)[sexp_vector_length(*shares)-1] = tmp;
