@@ -150,6 +150,9 @@ static sexp sexp_env_undefine (sexp ctx, sexp env, sexp key) {
   return SEXP_FALSE;
 }
 
+/* note: key and value are not GC-rooted here — callers must root them.
+   safe in practice: callers always root, and common values (symbols,
+   SEXP_VOID) are immediates that can't be swept. (tein M5) */
 sexp sexp_env_cell_define (sexp ctx, sexp env, sexp key,
                            sexp value, sexp *varenv) {
   sexp_gc_var2(cell, ls);
@@ -196,11 +199,13 @@ sexp sexp_env_define (sexp ctx, sexp env, sexp key, sexp value) {
     while (sexp_env_syntactic_p(env) && sexp_env_parent(env))
       env = sexp_env_parent(env);
     sexp_env_push(ctx, env, tmp, key, value);
+    if (sexp_exceptionp(tmp)) return tmp;  /* tein: M6 OOM guard */
   } else if (sexp_immutablep(cell)) {
     res = sexp_user_exception(ctx, NULL, "immutable binding", key);
   } else if (sexp_syntacticp(value) && !sexp_syntacticp(sexp_cdr(cell))) {
     sexp_env_undefine(ctx, env, key);
     sexp_env_push(ctx, env, tmp, key, value);
+    if (sexp_exceptionp(tmp)) return tmp;  /* tein: M6 OOM guard */
   } else {
     sexp_cdr(cell) = value;
   }
@@ -792,9 +797,8 @@ static sexp analyze_seq (sexp ctx, sexp ls, int depth, int defok) {
 }
 
 static sexp analyze_macro_once (sexp ctx, sexp name, sexp x, sexp op, int depth) {
-  sexp res;
-  sexp_gc_var2(tmp, hook_args);
-  sexp_gc_preserve2(ctx, tmp, hook_args);
+  sexp_gc_var3(res, tmp, hook_args);
+  sexp_gc_preserve3(ctx, res, tmp, hook_args);
   tmp = sexp_cons(ctx, sexp_macro_env(op), SEXP_NULL);
   tmp = sexp_cons(ctx, sexp_context_env(ctx), tmp);
   tmp = sexp_cons(ctx, x, tmp);
@@ -824,7 +828,7 @@ static sexp analyze_macro_once (sexp ctx, sexp name, sexp x, sexp op, int depth)
       res = hook_args;
     tein_macro_expand_hook_active = 0;
   }
-  sexp_gc_release2(ctx);
+  sexp_gc_release3(ctx);
   return res;
 }
 
@@ -2665,8 +2669,13 @@ sexp sexp_load_standard_env (sexp ctx, sexp e, sexp version) {
       /* splice import in place to mutate both this env and the */
       /* frozen version in the meta env) */
       tmp = sexp_cons(ctx, sym, tmp);
-      sexp_env_next_cell(tmp) = sexp_env_next_cell(sexp_env_bindings(e));
-      sexp_env_next_cell(sexp_env_bindings(e)) = tmp;
+      if (sexp_pairp(sexp_env_bindings(e))) {
+        sexp_env_next_cell(tmp) = sexp_env_next_cell(sexp_env_bindings(e));
+        sexp_env_next_cell(sexp_env_bindings(e)) = tmp;
+      } else {
+        sexp_env_next_cell(tmp) = SEXP_NULL;
+        sexp_env_bindings(e) = tmp;
+      }
     }
   }
 #endif
@@ -2710,6 +2719,10 @@ sexp sexp_env_import_op (sexp ctx, sexp self, sexp_sint_t n, sexp to, sexp from,
   sexp_gc_preserve3(ctx, value, oldcell, tmp);
   if (! sexp_envp(to)) to = sexp_context_env(ctx);
   if (! sexp_envp(from)) from = sexp_context_env(ctx);
+  if (to == from) {  /* tein: M8 self-import would destroy bindings */
+    sexp_gc_release3(ctx);
+    return SEXP_VOID;
+  }
   /* create an empty imports env frame */
   value = sexp_make_env(ctx);
   if (sexp_exceptionp(value)) {     /* tein: H7 OOM guard */
