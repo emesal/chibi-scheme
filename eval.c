@@ -254,15 +254,23 @@ sexp sexp_extend_synclo_env (sexp ctx, sexp env) {
   e = env;
   if (sexp_pairp(sexp_context_fv(ctx))) {
     e = sexp_alloc_type(ctx, env, SEXP_ENV);
+    if (sexp_exceptionp(e)) { sexp_gc_release1(ctx); return e; }
     for (e1=env, e2=NULL; e1; e1=sexp_env_parent(e1)) {
-      e2 = e2 ? (sexp_env_parent(e2) = sexp_alloc_type(ctx, env, SEXP_ENV)) : e;
+      if (e2) {
+        sexp tmp = sexp_alloc_type(ctx, env, SEXP_ENV);
+        if (sexp_exceptionp(tmp)) { sexp_gc_release1(ctx); return tmp; }
+        sexp_env_parent(e2) = tmp;
+        e2 = tmp;
+      } else {
+        e2 = e;
+      }
       sexp_env_bindings(e2) = sexp_env_bindings(e1);
       sexp_env_syntactic_p(e2) = 1;
 #if SEXP_USE_STABLE_ABI || SEXP_USE_RENAME_BINDINGS
       sexp_env_renames(e2) = sexp_env_renames(e1);
 #endif
     }
-    if (!e2) { return sexp_global(ctx, SEXP_G_OOM_ERROR); }
+    if (!e2) { sexp_gc_release1(ctx); return sexp_global(ctx, SEXP_G_OOM_ERROR); }
     sexp_env_parent(e2) = sexp_context_env(ctx);
   }
   sexp_gc_release1(ctx);
@@ -753,6 +761,7 @@ static sexp analyze_list (sexp ctx, sexp x, int depth, int defok) {
 static sexp analyze_app (sexp ctx, sexp x, int depth) {
   sexp p, res, tmp;
   res = analyze_list(ctx, x, depth, 0);
+  if (sexp_exceptionp(res)) return res;
   if (sexp_lambdap(sexp_car(res))) {       /* fill in lambda names */
     p=sexp_lambda_params(sexp_car(res));
     for (tmp=sexp_cdr(res); sexp_pairp(tmp)&&sexp_pairp(p); tmp=sexp_cdr(tmp), p=sexp_cdr(p))
