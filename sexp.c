@@ -3113,7 +3113,7 @@ static int sexp_decode_utf8_char(const unsigned char* s) {
     } else if ((i < 0xF0) && (len == 3) && (s[2]>>6 == 2)) {
       return ((i&0x1F)<<12) + ((s[1]&0x3F)<<6) + (s[2]&0x3F);
     } else if ((len == 4) && (s[2]>>6 == 2) && (s[3]>>6 == 2)) {
-      return ((i&0x0F)<<16) + ((s[1]&0x3F)<<6) + ((s[2]&0x3F)<<6) + (s[3]&0x3F);
+      return ((i&0x07)<<18) + ((s[1]&0x3F)<<12) + ((s[2]&0x3F)<<6) + (s[3]&0x3F);
     }
   }
   return -1;
@@ -3636,8 +3636,14 @@ sexp sexp_read_raw (sexp ctx, sexp in, sexp *shares) {
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
       c2 = digit_value(c1);
-      while (isdigit(c1=sexp_read_char(ctx, in)))
+      while (isdigit(c1=sexp_read_char(ctx, in))) {
+        if (c2 > (INT_MAX - 9) / 10) {
+          res = sexp_read_error(ctx, "reader label too large", SEXP_NULL, in);
+          break;
+        }
         c2 = c2 * 10 + digit_value(c1);
+      }
+      if (sexp_exceptionp(res)) break;
       tmp = sexp_make_fixnum(c2);
       if (c1 == '#') {
         if (!sexp_vectorp(*shares) ||
