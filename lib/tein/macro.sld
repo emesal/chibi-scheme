@@ -1,3 +1,4 @@
 (define-library (tein macro)
+  (import (scheme base))
   (export set-macro-expand-hook! unset-macro-expand-hook! macro-expand-hook)
   (include "macro.scm"))
