@@ -251,14 +251,68 @@ void tein_sexp_context_env_set(sexp ctx, sexp env) { sexp_context_env(ctx) = env
 #include <string.h>
 #include <stdlib.h>
 
+// --- dynamic VFS entries (registered at runtime from rust) ---
+//
+// per-thread linked list of heap-allocated entries, searched after the static
+// compile-time table. each Context manages its own set (cleared on drop).
+// safe because Context is !Send — one context per thread.
+
+struct tein_vfs_dynamic_entry {
+    char *key;
+    char *content;
+    unsigned int length;
+    struct tein_vfs_dynamic_entry *next;
+};
+
+static __thread struct tein_vfs_dynamic_entry *tein_vfs_dynamic_head = NULL;
+
+// register a VFS entry at runtime. key and content are copied.
+// called from rust via ffi — Context::register_vfs_module().
+void tein_vfs_register(const char *key, const char *content, unsigned int length) {
+    struct tein_vfs_dynamic_entry *entry = malloc(sizeof(struct tein_vfs_dynamic_entry));
+    entry->key = malloc(strlen(key) + 1);
+    strcpy(entry->key, key);
+    entry->content = malloc(length);
+    memcpy(entry->content, content, length);
+    entry->length = length;
+    entry->next = tein_vfs_dynamic_head;
+    tein_vfs_dynamic_head = entry;
+}
+
+// clear all dynamic VFS entries for this thread. called from Context::drop() via ffi.
+void tein_vfs_clear_dynamic(void) {
+    struct tein_vfs_dynamic_entry *entry = tein_vfs_dynamic_head;
+    while (entry) {
+        struct tein_vfs_dynamic_entry *next = entry->next;
+        free(entry->key);
+        free(entry->content);
+        free(entry);
+        entry = next;
+    }
+    tein_vfs_dynamic_head = NULL;
+}
+
 // look up embedded content by full VFS path (e.g. "/vfs/lib/init-7.scm").
-// returns the static content string and sets *out_length, or NULL if not found.
+// checks static compile-time table first, then dynamic runtime entries.
+// returns the content string and sets *out_length, or NULL if not found.
+// look up embedded content by full VFS path (e.g. "/vfs/lib/init-7.scm").
+// checks static compile-time table first, then dynamic runtime entries.
+// returns the content string and sets *out_length, or NULL if not found.
 const char* tein_vfs_lookup(const char *full_path, unsigned int *out_length) {
     for (int i = 0; tein_vfs_table[i].key != NULL; i++) {
         if (strcmp(tein_vfs_table[i].key, full_path) == 0) {
             if (out_length) *out_length = tein_vfs_table[i].length;
             return tein_vfs_table[i].content;
         }
+    }
+    // dynamic table (runtime VFS from rust — user modules)
+    struct tein_vfs_dynamic_entry *entry = tein_vfs_dynamic_head;
+    while (entry) {
+        if (strcmp(entry->key, full_path) == 0) {
+            if (out_length) *out_length = entry->length;
+            return entry->content;
+        }
+        entry = entry->next;
     }
     return NULL;
 }
