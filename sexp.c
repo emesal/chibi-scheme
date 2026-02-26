@@ -2619,6 +2619,13 @@ sexp sexp_read_string (sexp ctx, sexp in, int sentinel) {
 #endif
           }
           c = sexp_unbox_fixnum(res);
+          /* L7: reject surrogates and codepoints beyond Unicode range */
+          if (((unsigned)c >= 0xD800 && (unsigned)c <= 0xDFFF)
+              || (unsigned)c > 0x10FFFF) {
+            res = sexp_read_error(ctx, "invalid unicode codepoint in \\x escape",
+                                  sexp_list1(ctx, res), in);
+            break;
+          }
 #if SEXP_USE_UTF8_STRINGS
           if ((unsigned)c > 0x80) {
             len = sexp_utf8_char_byte_count(c);

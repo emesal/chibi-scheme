@@ -1068,7 +1068,8 @@ int sexp_poll_port(sexp ctx, sexp port, int inputp) {
   FD_SET(fd, &fds);
   timeout.tv_sec = 0;
   timeout.tv_usec = 10000;  /* 10millis */
-  return select(1, (inputp ? &fds : NULL), (inputp ? NULL : &fds), NULL, &timeout);
+  /* L12: nfds must be highest fd + 1, not 1 */
+  return select(fd+1, (inputp ? &fds : NULL), (inputp ? NULL : &fds), NULL, &timeout);
 }
 #endif
 
@@ -2096,7 +2097,12 @@ sexp sexp_apply (sexp ctx, sexp proc, sexp args) {
   case SEXP_OP_INT2CHAR:
     if (! sexp_fixnump(_ARG1))
       sexp_raise("integer->char: not an integer", sexp_list1(ctx, _ARG1));
-    _ARG1 = sexp_make_character(sexp_unbox_fixnum(_ARG1));
+    /* L11: reject surrogates, negative, and codepoints beyond Unicode range */
+    i = sexp_unbox_fixnum(_ARG1);
+    if (i < 0 || (i >= 0xD800 && i <= 0xDFFF) || i > 0x10FFFF)
+      sexp_raise("integer->char: value is not a Unicode scalar value",
+                 sexp_list1(ctx, _ARG1));
+    _ARG1 = sexp_make_character(i);
     break;
   case SEXP_OP_CHAR_UPCASE:
     if (! sexp_charp(_ARG1))

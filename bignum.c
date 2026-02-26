@@ -307,6 +307,8 @@ sexp sexp_read_bignum (sexp ctx, sexp in, sexp_uint_t init,
   sexp_gc_var3(res, tmp, imag);
   sexp_gc_preserve3(ctx, res, tmp, imag);
   res = sexp_make_bignum(ctx, SEXP_INIT_BIGNUM_SIZE);
+  /* L15: check for OOM before writing into the result */
+  if (sexp_exceptionp(res)) { sexp_gc_release3(ctx); return res; }
   sexp_bignum_sign(res) = sign;
   sexp_bignum_data(res)[0] = init;
   for (c=sexp_read_char(ctx, in); sexp_isxdigit(c); c=sexp_read_char(ctx, in)) {
