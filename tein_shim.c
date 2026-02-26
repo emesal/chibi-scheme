@@ -264,7 +264,7 @@ struct tein_vfs_dynamic_entry {
     struct tein_vfs_dynamic_entry *next;
 };
 
-static __thread struct tein_vfs_dynamic_entry *tein_vfs_dynamic_head = NULL;
+static TEIN_THREAD_LOCAL struct tein_vfs_dynamic_entry *tein_vfs_dynamic_head = NULL;
 
 // register a VFS entry at runtime. key and content are copied.
 // called from rust via ffi — Context::register_vfs_module().
