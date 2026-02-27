@@ -45,6 +45,41 @@ sexp tein_sexp_make_bytes(sexp ctx, sexp_uint_t len, unsigned char init) {
     return sexp_make_bytes(ctx, sexp_make_fixnum(len), sexp_make_fixnum(init));
 }
 
+// numeric tower predicates (via tein shim)
+int tein_sexp_bignump(sexp x) { return sexp_bignump(x); }
+int tein_sexp_ratiop(sexp x) { return sexp_ratiop(x); }
+int tein_sexp_complexp(sexp x) { return sexp_complexp(x); }
+
+// bignum operations
+int tein_sexp_bignum_sign(sexp x) { return sexp_bignum_sign(x); }
+
+sexp tein_sexp_bignum_to_string(sexp ctx, sexp x) {
+    sexp out = sexp_open_output_string(ctx);
+    sexp_write_bignum(ctx, x, out, 10);
+    return sexp_get_output_string(ctx, out);
+}
+
+// ratio operations
+sexp tein_sexp_ratio_numerator(sexp x) { return sexp_ratio_numerator(x); }
+sexp tein_sexp_ratio_denominator(sexp x) { return sexp_ratio_denominator(x); }
+
+// complex operations
+sexp tein_sexp_complex_real(sexp x) { return sexp_complex_real(x); }
+sexp tein_sexp_complex_imag(sexp x) { return sexp_complex_imag(x); }
+
+// numeric tower constructors
+sexp tein_sexp_string_to_number(sexp ctx, sexp str, int base) {
+    return sexp_string_to_number(ctx, str, sexp_make_fixnum(base));
+}
+
+sexp tein_sexp_make_ratio(sexp ctx, sexp num, sexp den) {
+    return sexp_make_ratio(ctx, num, den);
+}
+
+sexp tein_sexp_make_complex(sexp ctx, sexp real, sexp imag) {
+    return sexp_make_complex(ctx, real, imag);
+}
+
 // vector operations
 int tein_sexp_vectorp(sexp x) { return sexp_vectorp(x); }
 sexp_uint_t tein_sexp_vector_length(sexp x) { return sexp_vector_length(x); }
