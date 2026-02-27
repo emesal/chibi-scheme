@@ -2768,7 +2768,13 @@ sexp sexp_env_import_op (sexp ctx, sexp self, sexp_sint_t n, sexp to, sexp from,
             && !sexp_same_bindingp(oldcell, value))
           sexp_warn(ctx, "importing already defined binding: ", newname);
       } else {
-        sexp_warn(ctx, "importing undefined variable: ", oldname);
+        /* tein: suppress "importing undefined variable" for names that exist in
+           the destination env chain (e.g. rust-registered bindings from
+           define_fn_variadic, which live in the top-level env rather than the
+           library env). the warning is only useful when the name is truly absent
+           everywhere. see github.com/emesal/tein/issues/57 */
+        if (!oldcell)
+          sexp_warn(ctx, "importing undefined variable: ", oldname);
 #endif
       }
     }
