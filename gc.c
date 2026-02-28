@@ -114,7 +114,16 @@ void sexp_free(void* ptr) {
 #endif
 
 void sexp_preserve_object(sexp ctx, sexp x) {
-  sexp_global(ctx, SEXP_G_PRESERVATIVES) = sexp_cons(ctx, x, sexp_global(ctx, SEXP_G_PRESERVATIVES));
+  /* root x across the sexp_cons allocation — without this, x is only
+   * reachable from the C stack or caller locals, neither of which are
+   * scanned by precise GC (SEXP_USE_CONSERVATIVE_GC=0).  if sexp_cons
+   * triggers a collection, x could be swept and the cons cell would
+   * point to freed/reused memory. */
+  sexp_gc_var1(tmp);
+  sexp_gc_preserve1(ctx, tmp);
+  tmp = x;
+  sexp_global(ctx, SEXP_G_PRESERVATIVES) = sexp_cons(ctx, tmp, sexp_global(ctx, SEXP_G_PRESERVATIVES));
+  sexp_gc_release1(ctx);
 }
 
 void sexp_release_object(sexp ctx, sexp x) {
