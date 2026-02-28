@@ -672,21 +672,22 @@ static int generate_lambda_body (sexp ctx, sexp name, sexp loc, sexp lam, sexp x
 #endif
 
 static void generate_lambda (sexp ctx, sexp name, sexp loc, sexp lam, sexp lambda) {
-  sexp ctx2, fv, ls, flags, len, ref, prev_lambda, prev_fv;
+  sexp fv, ls, flags, len, ref, prev_lambda, prev_fv;
   sexp_sint_t k;
-  sexp_gc_var2(tmp, bc);
+  sexp_gc_var3(tmp, bc, ctx2);
   if (sexp_exceptionp(sexp_context_exception(ctx)))
     return;
   prev_lambda = sexp_context_lambda(ctx);
   prev_fv = sexp_lambdap(prev_lambda) ? sexp_lambda_fv(prev_lambda) : SEXP_NULL;
   fv = sexp_lambda_fv(lambda);
+  sexp_gc_preserve3(ctx, tmp, bc, ctx2);
   ctx2 = sexp_make_eval_context(ctx, sexp_context_stack(ctx), sexp_context_env(ctx), 0, 0);
   if (sexp_exceptionp(ctx2)) {
     sexp_context_exception(ctx) = ctx2;
+    sexp_gc_release3(ctx);
     return;
   }
   sexp_context_lambda(ctx2) = lambda;
-  sexp_gc_preserve2(ctx, tmp, bc);
 #if SEXP_USE_FULL_SOURCE_INFO
   tmp = sexp_cons(ctx, SEXP_NEG_ONE, sexp_lambda_source(lambda));
   tmp = sexp_cons(ctx, tmp, SEXP_NULL);
@@ -765,7 +766,7 @@ static void generate_lambda (sexp ctx, sexp name, sexp loc, sexp lam, sexp lambd
     bytecode_preserve(ctx, bc);
   }
   }
-  sexp_gc_release2(ctx);
+  sexp_gc_release3(ctx);
 }
 
 void sexp_generate (sexp ctx, sexp name, sexp loc, sexp lam, sexp x) {
