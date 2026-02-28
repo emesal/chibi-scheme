@@ -256,6 +256,8 @@ int tein_module_allowed(const char *path) {
     if (strncmp(path, "/vfs/lib/", 9) != 0) return 0;        /* all non-unrestricted block filesystem */
     if (strstr(path, "..") != NULL) return 0;                 /* path traversal guard */
     if (tein_module_policy == 1) return 1;                    /* vfs-all */
+    /* .scm includes are only reachable via an already-allowed .sld; skip allowlist check */
+    { size_t n = strlen(path); if (n > 4 && strcmp(path + n - 4, ".scm") == 0) return 1; }
     return tein_module_allowlist_check(path);                  /* allowlist — ask rust */
 }
 
