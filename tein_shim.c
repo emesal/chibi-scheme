@@ -239,19 +239,24 @@ sexp tein_make_error(sexp ctx, const char* msg, sexp_sint_t len) {
 
 // --- module import policy ---
 //
-// controls which modules can be loaded via sexp_find_module_file_raw.
-// 0 = unrestricted (all modules allowed), 1 = vfs-only (only /vfs/lib/ paths).
-// set from rust before loading the standard env in sandboxed contexts.
+// three-tier policy for (import ...) restriction:
+//   0 = unrestricted (all modules allowed)
+//   1 = vfs-all (only /vfs/lib/ paths, but any of them)
+//   2 = allowlist (only paths approved by rust callback)
 
 TEIN_THREAD_LOCAL int tein_module_policy = 0;
+
+// rust callback for allowlist checks (defined in ffi.rs)
+extern int tein_module_allowlist_check(const char *path);
 
 // check if a module path is allowed under the current policy.
 // called from eval.c patch A (sexp_find_module_file_raw).
 int tein_module_allowed(const char *path) {
-    if (tein_module_policy == 0) return 1;
-    if (strncmp(path, "/vfs/lib/", 9) != 0) return 0;
-    if (strstr(path, "..") != NULL) return 0;  /* no path traversal */
-    return 1;
+    if (tein_module_policy == 0) return 1;                    /* unrestricted */
+    if (strncmp(path, "/vfs/lib/", 9) != 0) return 0;        /* all non-unrestricted block filesystem */
+    if (strstr(path, "..") != NULL) return 0;                 /* path traversal guard */
+    if (tein_module_policy == 1) return 1;                    /* vfs-all */
+    return tein_module_allowlist_check(path);                  /* allowlist — ask rust */
 }
 
 // set the module policy. called from rust ffi.
