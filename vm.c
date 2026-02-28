@@ -171,10 +171,17 @@ static void sexp_emit_word (sexp ctx, sexp_uint_t val)  {
 }
 
 static void sexp_emit_push (sexp ctx, sexp obj) {
+  /* root obj across sexp_expand_bcode (in sexp_emit_word) and sexp_cons
+   * (in bytecode_preserve) — both may trigger GC while obj is otherwise
+   * only a C local, invisible to the precise GC. */
+  sexp_gc_var1(tmp);
+  sexp_gc_preserve1(ctx, tmp);
+  tmp = obj;
   sexp_emit(ctx, SEXP_OP_PUSH);
-  sexp_emit_word(ctx, (sexp_uint_t)obj);
+  sexp_emit_word(ctx, (sexp_uint_t)tmp);
   sexp_inc_context_depth(ctx, 1);
-  bytecode_preserve(ctx, obj);
+  bytecode_preserve(ctx, tmp);
+  sexp_gc_release1(ctx);
 }
 
 void sexp_emit_return (sexp ctx) {
