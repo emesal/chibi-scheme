@@ -237,33 +237,28 @@ sexp tein_make_error(sexp ctx, const char* msg, sexp_sint_t len) {
     return sexp_user_exception(ctx, SEXP_FALSE, msg, SEXP_NULL);
 }
 
-// --- module import policy ---
+// --- VFS gate ---
 //
-// three-tier policy for (import ...) restriction:
-//   0 = unrestricted (all modules allowed)
-//   1 = vfs-all (only /vfs/lib/ paths, but any of them)
-//   2 = allowlist (only paths approved by rust callback)
+// two-level gate for (import ...) restriction:
+//   0 = off (all modules allowed — VFS + filesystem)
+//   1 = check (rust callback decides)
 
-TEIN_THREAD_LOCAL int tein_module_policy = 0;
+TEIN_THREAD_LOCAL int tein_vfs_gate = 0;
 
-// rust callback for allowlist checks (defined in ffi.rs)
-extern int tein_module_allowlist_check(const char *path);
+// rust callback for gate checks (defined in ffi.rs).
+// absorbs VFS prefix check, path traversal guard, .scm passthrough, and allowlist matching.
+extern int tein_vfs_gate_check(const char *path);
 
-// check if a module path is allowed under the current policy.
+// check if a module path is allowed under the current gate.
 // called from eval.c patch A (sexp_find_module_file_raw).
 int tein_module_allowed(const char *path) {
-    if (tein_module_policy == 0) return 1;                    /* unrestricted */
-    if (strncmp(path, "/vfs/lib/", 9) != 0) return 0;        /* all non-unrestricted block filesystem */
-    if (strstr(path, "..") != NULL) return 0;                 /* path traversal guard */
-    if (tein_module_policy == 1) return 1;                    /* vfs-all */
-    /* .scm includes are only reachable via an already-allowed .sld; skip allowlist check */
-    { size_t n = strlen(path); if (n > 4 && strcmp(path + n - 4, ".scm") == 0) return 1; }
-    return tein_module_allowlist_check(path);                  /* allowlist — ask rust */
+    if (tein_vfs_gate == 0) return 1;         /* off — allow everything */
+    return tein_vfs_gate_check(path);          /* rust callback */
 }
 
-// set the module policy. called from rust ffi.
-void tein_module_policy_set(int policy) {
-    tein_module_policy = policy;
+// set the VFS gate level. called from rust ffi.
+void tein_vfs_gate_set(int level) {
+    tein_vfs_gate = level;
 }
 
 // environment manipulation (sandboxing)
