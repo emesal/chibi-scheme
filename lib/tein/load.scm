@@ -1,10 +1,11 @@
 ;;; (tein load) — VFS-restricted load
 ;;;
-;;; exports `load` which is aliased from `tein-load-vfs-internal`, a rust
-;;; trampoline registered by the runtime. it accepts only VFS paths (/vfs/...)
-;;; and evaluates the embedded content. non-VFS paths return a sandbox
-;;; violation error.
+;;; exports `load` aliased from `tein-load-vfs-internal`, a rust trampoline
+;;; registered by the runtime. it accepts only VFS paths (/vfs/...) and
+;;; evaluates the embedded content. non-VFS paths return a sandbox violation.
 ;;;
-;;; NOTE: the internal name `tein-load-vfs-internal` is used to avoid overriding
-;;; chibi's built-in `load` at the global level (which the module loader uses
-;;; for (include ...) in .sld files). the alias is set in load.sld via (begin ...).
+;;; the internal name avoids overriding chibi's built-in `load`, which the
+;;; module loader uses for (include ...) in .sld files. only scopes that
+;;; explicitly `(import (tein load))` get the VFS-restricted version.
+
+(define load tein-load-vfs-internal)
