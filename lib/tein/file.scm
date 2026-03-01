@@ -1,12 +1,43 @@
-;;; (tein file) — safe file existence and deletion
+;;; (tein file) — safe file IO with FsPolicy enforcement
 ;;;
-;;; file-exists? and delete-file are rust trampolines registered by the
-;;; runtime via define_fn_variadic. they check IS_SANDBOXED + FsPolicy:
-;;; - unsandboxed context: allow all paths
-;;; - sandboxed context without file_read/file_write: deny all
-;;; - sandboxed context with policy: check against configured prefixes
+;;; file-exists?, delete-file, open-input-file, open-binary-input-file,
+;;; open-output-file, open-binary-output-file are rust trampolines registered
+;;; by register_file_module() in context.rs. policy:
+;;;   - unsandboxed: allow all (delegate to chibi original)
+;;;   - sandboxed + policy: check prefix, then delegate
+;;;   - sandboxed + no policy: deny (sandbox violation)
 ;;;
-;;; open-input-file, open-output-file, and the higher-order wrappers
-;;; (call-with-input-file, with-input-from-file, etc.) are available from
-;;; the standard environment and do not need to be re-exported here — the
-;;; io policy wrapping is applied directly by the context builder.
+;;; the 4 higher-order wrappers below delegate to the above primitives —
+;;; policy enforcement happens at open-* (single point of check).
+
+(define (call-with-input-file filename proc)
+  (let ((port (open-input-file filename)))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda () (proc port))
+      (lambda () (close-input-port port)))))
+
+(define (call-with-output-file filename proc)
+  (let ((port (open-output-file filename)))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda () (proc port))
+      (lambda () (close-output-port port)))))
+
+(define (with-input-from-file filename thunk)
+  (let ((port (open-input-file filename)))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (parameterize ((current-input-port port))
+          (thunk)))
+      (lambda () (close-input-port port)))))
+
+(define (with-output-to-file filename thunk)
+  (let ((port (open-output-file filename)))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (parameterize ((current-output-port port))
+          (thunk)))
+      (lambda () (close-output-port port)))))
