@@ -3,9 +3,12 @@
 ;;; get-environment-variable, get-environment-variables, command-line,
 ;;; and exit are rust trampolines registered by the runtime.
 ;;;
-;;; NOT in SAFE_MODULES — command-line leaks host argv. available via
-;;; .vfs_all() or .allow_module("tein/process").
+;;; exit and emergency-exit: both have emergency-exit semantics — they
+;;; immediately return control to the rust host without running dynamic-wind
+;;; "after" thunks. r7rs exit should run those cleaners; that requires an
+;;; unwind continuation around evaluate(), which tein does not yet establish.
+;;; tracked in GH #101. a future standalone interpreter host can wrap
+;;; evaluate() to provide correct r7rs exit semantics.
 ;;;
-;;; exit is an eval escape hatch: (exit) or (exit obj) immediately returns
-;;; to the rust caller with the given value. does not invoke dynamic-wind
-;;; cleanup (emergency-exit semantics).
+;;; in sandboxed contexts, get-environment-variable returns #f,
+;;; get-environment-variables returns '(), and command-line returns '("tein").
