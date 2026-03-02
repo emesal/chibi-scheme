@@ -12,6 +12,8 @@
 extern const char* tein_vfs_lookup(const char *full_path, unsigned int *out_length);
 /* tein module policy: forward declaration for import restriction (tein_shim.c) */
 extern int tein_module_allowed(const char *path);
+/* tein FS policy: forward declaration for file IO policy check (tein_shim.c) */
+extern int tein_fs_check_access(const char *path, int is_read);
 /* tein macro expansion hook: thread-local hook + recursion guard (tein_shim.c) */
 #ifndef TEIN_THREAD_LOCAL
 #ifdef _MSC_VER
@@ -1377,6 +1379,10 @@ sexp sexp_open_input_file_op (sexp ctx, sexp self, sexp_sint_t n, sexp path) {
       return port;
     }
   }
+  /* tein: FS policy gate — deny file reads when sandboxed without permission (patch F).
+   * VFS paths return early above; this only runs for real filesystem access. */
+  if (!tein_fs_check_access(sexp_string_data(path), 1))
+    return sexp_user_exception(ctx, self, "file read access denied by sandbox policy", path);
   do {
     if (count != 0) sexp_gc(ctx, NULL);
     in = fopen(sexp_string_data(path), "r");
@@ -1393,6 +1399,10 @@ sexp sexp_open_output_file_op (sexp ctx, sexp self, sexp_sint_t n, sexp path) {
   FILE *out;
   int count = 0;
   sexp_assert_type(ctx, sexp_stringp, SEXP_STRING, path);
+  /* tein: FS policy gate — deny file writes when sandboxed without permission (patch G).
+   * output files have no VFS path — this always runs for real filesystem access. */
+  if (!tein_fs_check_access(sexp_string_data(path), 0))
+    return sexp_user_exception(ctx, self, "file write access denied by sandbox policy", path);
   do {
     if (count != 0) sexp_gc(ctx, NULL);
     out = fopen(sexp_string_data(path), "w");
