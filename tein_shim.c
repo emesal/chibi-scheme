@@ -261,6 +261,33 @@ void tein_vfs_gate_set(int level) {
     tein_vfs_gate = level;
 }
 
+// --- FS policy gate ---
+//
+// two-level gate for file IO policy enforcement:
+//   0 = off (all file access allowed — unsandboxed)
+//   1 = check (rust callback decides based on FsPolicy)
+//
+// patched into sexp_open_input_file_op / sexp_open_output_file_op
+// in eval.c (patches F, G). VFS paths bypass this (handled before fopen).
+
+TEIN_THREAD_LOCAL int tein_fs_policy_gate = 0;
+
+// rust callback for FS policy checks (defined in ffi.rs).
+// checks IS_SANDBOXED + FsPolicy prefix matching.
+extern int tein_fs_policy_check(const char *path, int is_read);
+
+// check if file access is allowed under the current gate.
+// called from eval.c patches F and G.
+int tein_fs_check_access(const char *path, int is_read) {
+    if (tein_fs_policy_gate == 0) return 1;    /* off — allow everything */
+    return tein_fs_policy_check(path, is_read); /* rust callback */
+}
+
+// set the FS policy gate level. called from rust ffi.
+void tein_fs_policy_gate_set(int level) {
+    tein_fs_policy_gate = level;
+}
+
 // environment manipulation (sandboxing)
 sexp tein_sexp_make_null_env(sexp ctx, sexp version) { return sexp_make_null_env(ctx, version); }
 sexp tein_sexp_make_primitive_env(sexp ctx, sexp version) { return sexp_make_primitive_env(ctx, version); }
