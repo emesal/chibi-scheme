@@ -357,19 +357,12 @@ void tein_vfs_clear_dynamic(void) {
 }
 
 // look up embedded content by full VFS path (e.g. "/vfs/lib/init-7.scm").
-// checks static compile-time table first, then dynamic runtime entries.
-// returns the content string and sets *out_length, or NULL if not found.
 // look up embedded content by full VFS path (e.g. "/vfs/lib/init-7.scm").
-// checks static compile-time table first, then dynamic runtime entries.
+// checks dynamic runtime entries first (allowing shadows to override statics),
+// then falls back to static compile-time table.
 // returns the content string and sets *out_length, or NULL if not found.
 const char* tein_vfs_lookup(const char *full_path, unsigned int *out_length) {
-    for (int i = 0; tein_vfs_table[i].key != NULL; i++) {
-        if (strcmp(tein_vfs_table[i].key, full_path) == 0) {
-            if (out_length) *out_length = tein_vfs_table[i].length;
-            return tein_vfs_table[i].content;
-        }
-    }
-    // dynamic table (runtime VFS from rust — user modules)
+    // dynamic table first — runtime shadows override static entries
     struct tein_vfs_dynamic_entry *entry = tein_vfs_dynamic_head;
     while (entry) {
         if (strcmp(entry->key, full_path) == 0) {
@@ -377,6 +370,13 @@ const char* tein_vfs_lookup(const char *full_path, unsigned int *out_length) {
             return entry->content;
         }
         entry = entry->next;
+    }
+    // static table fallback
+    for (int i = 0; tein_vfs_table[i].key != NULL; i++) {
+        if (strcmp(tein_vfs_table[i].key, full_path) == 0) {
+            if (out_length) *out_length = tein_vfs_table[i].length;
+            return tein_vfs_table[i].content;
+        }
     }
     return NULL;
 }
