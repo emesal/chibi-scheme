@@ -561,7 +561,7 @@
 
 (define (tm:fractional-part r)
   (if (integer? r) "0"
-      (let ((str (number->string (exact->inexact r))))
+      (let ((str (number->string (inexact r))))
 	(let ((ppos (tm:char-pos #\. str 0 (string-length str))))
 	  (substring str  (+ ppos 1) (string-length str))))))
 
@@ -722,22 +722,22 @@
 
 (define (tm:date-week-number-iso date)
   ;; The week with the year's first Thursday is week 01.
-  (let* ([first-day-of-the-week (tm:week-day 1 1 (date-year date))]
-         [offset (if (> first-day-of-the-week 4) 0 1)]
+  (let* ((first-day-of-the-week (tm:week-day 1 1 (date-year date)))
+         (offset (if (> first-day-of-the-week 4) 0 1))
          ;; -2: decrement one day to compensate 1-origin of date-year-day,
          ;; and decrement one more day for Sunday belongs to the previous week.
-         [w (+ (floor-quotient (+ (date-year-day date) first-day-of-the-week -2)
+         (w (+ (floor-quotient (+ (date-year-day date) first-day-of-the-week -2)
                                7)
-               offset)])
-    (cond [(zero? w)
+               offset)))
+    (cond ((zero? w)
            ;; date belongs to the last week of the previous year
            (tm:date-week-number-iso (make-date 0 0 0 0 31 12
-                                               (- (date-year date) 1) 0))]
-          [(and (= w 53)
+                                               (- (date-year date) 1) 0)))
+          ((and (= w 53)
                 (<= (tm:week-day 1 1 (+ (date-year date) 1)) 4))
            ;; date belongs to the first week of the next year
-           1]
-          [else w])))
+           1)
+          (else w))))
 
 (define (current-date . tz-offset)
   (time-utc->date (current-time time-utc)
@@ -1262,8 +1262,8 @@
 	      (if (char=? ch #\:)
 		  (set! ch (read-char port))
 		  (if (eof-object? ch)
-		      (time-error 'string->date 'bad-date-template-string
-				  (list "Invalid time zone number" ch))))
+		      (tm:time-error 'string->date 'bad-date-template-string
+				     (list "Invalid time zone number" ch))))
 	      (set! offset (+ offset (* (tm:char->int ch)
 					10 60))))
 	    (let ((ch (read-char port)))
