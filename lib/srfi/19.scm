@@ -756,6 +756,8 @@
        (+ (- current-century 100) n)))))
 
 (define (date->julian-day date)
+  ;; tein fix: the reference impl had `(/ ... (- offset))` which divides by
+  ;; zero for UTC (offset=0). correct formula: subtract offset/sid separately.
   (let ( (nanosecond (date-nanosecond date))
 	 (second (date-second date))
 	 (minute (date-minute date))
@@ -766,9 +768,10 @@
 	 (offset (date-zone-offset date)) )
     (+ (tm:encode-julian-day-number day month year)
        (- 1/2)
-       (+ (/ (/ (+ (* hour 60 60)
-		   (* minute 60) second (/ nanosecond tm:nano)) tm:sid)
-	     (- offset))))))
+       (- (/ (+ (* hour 60 60)
+		 (* minute 60) second (/ nanosecond tm:nano))
+	     tm:sid)
+	  (/ offset tm:sid)))))
 
 (define (date->modified-julian-day date)
   (- (date->julian-day date)
