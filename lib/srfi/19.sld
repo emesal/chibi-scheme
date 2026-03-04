@@ -5,6 +5,7 @@
 (define-library (srfi 19)
   (import (scheme base)
           (scheme char)
+          (scheme cxr)
           (scheme write)
           (scheme case-lambda)
           (srfi 9)

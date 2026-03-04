@@ -2777,15 +2777,33 @@ sexp sexp_env_import_op (sexp ctx, sexp self, sexp_sint_t n, sexp to, sexp from,
             && sexp_cdr(oldcell) != SEXP_UNDEF
             && !sexp_same_bindingp(oldcell, value))
           sexp_warn(ctx, "importing already defined binding: ", newname);
-      } else {
-        /* tein: suppress "importing undefined variable" for names that exist in
-           the destination env chain (e.g. rust-registered bindings from
-           define_fn_variadic, which live in the top-level env rather than the
-           library env). the warning is only useful when the name is truly absent
-           everywhere. see github.com/emesal/tein/issues/57 */
-        if (!oldcell)
-          sexp_warn(ctx, "importing undefined variable: ", oldname);
 #endif
+      } else {
+        /* tein patch H: when the name is absent from the library env (from),
+           fall back to the top-level env. this makes native procedures
+           registered via define_fn_variadic — which live in the top-level env,
+           not in any library env — importable as first-class library exports.
+           without this, (srfi 19) importing (tein time) would silently drop
+           current-second etc. because the tein/time library env only contains
+           stubs compiled from time.scm, not the native fns.
+           restricted to procedures to avoid accidentally promoting non-proc
+           top-level bindings into library import contexts. */
+        value = sexp_env_cell(ctx, sexp_context_env(ctx), oldname, 0);
+        if (value && sexp_procedurep(sexp_cdr(value))) {
+#if SEXP_USE_RENAME_BINDINGS
+          sexp_env_rename(ctx, to, newname, value);
+#else
+          sexp_env_push(ctx, to, tmp, newname, sexp_cdr(value));
+#endif
+        } else {
+          /* suppress warning if already reachable via destination env chain
+             (e.g. previous top-level import already wired it up).
+             see github.com/emesal/tein/issues/57 */
+#if SEXP_USE_WARN_UNDEFS
+          if (!oldcell)
+            sexp_warn(ctx, "importing undefined variable: ", oldname);
+#endif
+        }
       }
     }
   }
