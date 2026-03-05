@@ -475,6 +475,27 @@ sexp tein_make_custom_output_port(sexp ctx, sexp write_proc) {
     return sexp_make_custom_output_port(ctx, SEXP_FALSE, write_proc, SEXP_FALSE, SEXP_FALSE);
 }
 
+// --- parameter setting ---
+//
+// wraps sexp_set_parameter to allow setting current-output-port,
+// current-input-port, current-error-port from rust.
+
+void tein_sexp_set_parameter(sexp ctx, sexp env, sexp name, sexp value) {
+    sexp_set_parameter(ctx, env, name, value);
+}
+
+sexp tein_sexp_global_cur_in_symbol(sexp ctx) {
+    return sexp_global(ctx, SEXP_G_CUR_IN_SYMBOL);
+}
+
+sexp tein_sexp_global_cur_out_symbol(sexp ctx) {
+    return sexp_global(ctx, SEXP_G_CUR_OUT_SYMBOL);
+}
+
+sexp tein_sexp_global_cur_err_symbol(sexp ctx) {
+    return sexp_global(ctx, SEXP_G_CUR_ERR_SYMBOL);
+}
+
 // --- reader dispatch table ---
 /* reader dispatch table — 128 entries, ASCII-only.
  * maps ASCII chars (byte value 0–127) to scheme procedures for custom #x syntax.
