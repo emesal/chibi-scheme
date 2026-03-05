@@ -332,11 +332,16 @@ static TEIN_THREAD_LOCAL struct tein_vfs_dynamic_entry *tein_vfs_dynamic_head = 
 
 // register a VFS entry at runtime. key and content are copied.
 // called from rust via ffi — Context::register_vfs_module().
+// OOM aborts: mirrors rust's global allocator behaviour (panic/abort on OOM),
+// keeping the void signature stable across the ffi boundary.
 void tein_vfs_register(const char *key, const char *content, unsigned int length) {
     struct tein_vfs_dynamic_entry *entry = malloc(sizeof(struct tein_vfs_dynamic_entry));
+    if (!entry) { fprintf(stderr, "tein_vfs_register: OOM allocating entry\n"); abort(); }
     entry->key = malloc(strlen(key) + 1);
+    if (!entry->key) { free(entry); fprintf(stderr, "tein_vfs_register: OOM allocating key\n"); abort(); }
     strcpy(entry->key, key);
     entry->content = malloc(length);
+    if (!entry->content) { free(entry->key); free(entry); fprintf(stderr, "tein_vfs_register: OOM allocating content\n"); abort(); }
     memcpy(entry->content, content, length);
     entry->length = length;
     entry->next = tein_vfs_dynamic_head;
