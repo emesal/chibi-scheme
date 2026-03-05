@@ -486,13 +486,7 @@ sexp tein_make_custom_output_port(sexp ctx, sexp write_proc) {
 // current-input-port, current-error-port from rust.
 
 void tein_sexp_set_parameter(sexp ctx, sexp env, sexp name, sexp value) {
-    sexp param = sexp_env_ref(ctx, env, name, SEXP_FALSE);
-    fprintf(stderr, "[shim] set_parameter: param opcode=%p, opcode_data=%p\n",
-            (void*)param, sexp_opcodep(param) ? (void*)sexp_opcode_data(param) : NULL);
     sexp_set_parameter(ctx, env, name, value);
-    fprintf(stderr, "[shim] set_parameter after: opcode_data cdr=%p (should be our port)\n",
-            sexp_opcodep(param) && sexp_pairp(sexp_opcode_data(param))
-                ? (void*)sexp_cdr(sexp_opcode_data(param)) : NULL);
 }
 
 sexp tein_sexp_global_cur_in_symbol(sexp ctx) {
@@ -501,12 +495,6 @@ sexp tein_sexp_global_cur_in_symbol(sexp ctx) {
 
 sexp tein_sexp_global_cur_out_symbol(sexp ctx) {
     return sexp_global(ctx, SEXP_G_CUR_OUT_SYMBOL);
-}
-
-// diagnostic: print what sexp_current_output_port(ctx) resolves to
-void tein_dbg_print_cur_out(sexp ctx) {
-    sexp cop = sexp_current_output_port(ctx);
-    fprintf(stderr, "[shim] sexp_current_output_port(ctx)=%p\n", (void*)cop);
 }
 
 sexp tein_sexp_global_cur_err_symbol(sexp ctx) {
