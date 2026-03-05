@@ -624,3 +624,13 @@ void tein_macro_expand_hook_clear(sexp ctx) {
     tein_macro_expand_hook = SEXP_FALSE;
     tein_macro_expand_hook_active = 0;
 }
+
+/* --- sandboxed (scheme eval) support (#97) --- */
+
+sexp tein_sexp_global_meta_env(sexp ctx) {
+    return sexp_global(ctx, SEXP_G_META_ENV);
+}
+
+sexp tein_sexp_make_immutable(sexp ctx, sexp x) {
+    return sexp_make_immutable_op(ctx, NULL, 1, x);
+}
