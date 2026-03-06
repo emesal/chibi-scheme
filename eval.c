@@ -2788,7 +2788,6 @@ sexp sexp_env_import_op (sexp ctx, sexp self, sexp_sint_t n, sexp to, sexp from,
            stubs compiled from time.scm, not the native fns.
            restricted to procedures to avoid accidentally promoting non-proc
            top-level bindings into library import contexts. */
-        fprintf(stderr, "[PATCH-H-DEBUG] import lookup: ctx_env=%p\n", (void*)sexp_context_env(ctx));
         value = sexp_env_cell(ctx, sexp_context_env(ctx), oldname, 0);
         if (value && sexp_procedurep(sexp_cdr(value))) {
 #if SEXP_USE_RENAME_BINDINGS
