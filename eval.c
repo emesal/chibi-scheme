@@ -2788,21 +2788,7 @@ sexp sexp_env_import_op (sexp ctx, sexp self, sexp_sint_t n, sexp to, sexp from,
            stubs compiled from time.scm, not the native fns.
            restricted to procedures to avoid accidentally promoting non-proc
            top-level bindings into library import contexts. */
-        {
-          const char* sym_name = sexp_symbolp(oldname) ? sexp_symbol_data(oldname) : "?";
-          fprintf(stderr, "[PATCH-H-DEBUG] looking up '%s' in ctx_env=%p\n", sym_name, (void*)sexp_context_env(ctx));
-          sexp ce = sexp_context_env(ctx); int depth = 0;
-          while (ce && sexp_envp(ce) && depth < 10) {
-            sexp bs = sexp_env_bindings(ce);
-            while (sexp_pairp(bs)) {
-              if (sexp_car(bs) == oldname) {
-                fprintf(stderr, "[PATCH-H-DEBUG] found '%s' at depth %d, val=%p\n", sym_name, depth, (void*)sexp_cdr(bs));
-              }
-              bs = sexp_env_next_cell(bs);
-            }
-            ce = sexp_env_parent(ce); depth++;
-          }
-        }
+        fprintf(stderr, "[PATCH-H-DEBUG] import lookup: ctx_env=%p\n", (void*)sexp_context_env(ctx));
         value = sexp_env_cell(ctx, sexp_context_env(ctx), oldname, 0);
         if (value && sexp_procedurep(sexp_cdr(value))) {
 #if SEXP_USE_RENAME_BINDINGS
