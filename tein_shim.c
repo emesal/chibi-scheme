@@ -386,6 +386,18 @@ const char* tein_vfs_lookup(const char *full_path, unsigned int *out_length) {
     return NULL;
 }
 
+// look up content in static VFS table only (skips dynamic entries).
+// used by rust to detect collisions with built-in modules.
+const char* tein_vfs_lookup_static(const char *full_path, unsigned int *out_length) {
+    for (int i = 0; tein_vfs_table[i].key != NULL; i++) {
+        if (strcmp(tein_vfs_table[i].key, full_path) == 0) {
+            if (out_length) *out_length = tein_vfs_table[i].length;
+            return tein_vfs_table[i].content;
+        }
+    }
+    return NULL;
+}
+
 // --- standard ports ---
 //
 // wraps sexp_load_standard_ports to bind stdin/stdout/stderr in an env.
