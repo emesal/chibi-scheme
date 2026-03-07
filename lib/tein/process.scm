@@ -4,8 +4,8 @@
 ;;; and emergency-exit are rust trampolines registered by the runtime.
 ;;;
 ;;; exit: r7rs-compliant — unwinds dynamic-wind "after" thunks via
-;;; travel-to-point!, flushes and closes current output and error ports,
-;;; then delegates to emergency-exit (rust trampoline, immediate VM halt).
+;;; travel-to-point!, flushes current output and error ports (r7rs requires
+;;; flush, not close), then delegates to emergency-exit (rust trampoline).
 ;;;
 ;;; emergency-exit: immediate halt — no dynamic-wind cleanup, no port
 ;;; flushing. r7rs semantics.
@@ -26,10 +26,10 @@
   ;; unwind dynamic-wind "after" thunks (innermost first)
   (travel-to-point! (%dk) %exit-root)
   (%dk %exit-root)
-  ;; flush and close ports (r7rs: "flushes all ports ... then exits")
+  ;; flush ports (r7rs: "flushes all open output ports ... then exits").
+  ;; do NOT close — closing may raise on custom ports with fallible writes,
+  ;; which would prevent emergency-exit from ever being called.
   (flush-output-port (current-output-port))
   (flush-output-port (current-error-port))
-  (close-output-port (current-output-port))
-  (close-output-port (current-error-port))
   ;; delegate to rust trampoline for actual VM halt
   (apply emergency-exit args))
