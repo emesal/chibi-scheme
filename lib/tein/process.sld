@@ -1,5 +1,5 @@
 (define-library (tein process)
-  (import (scheme base))
+  (import (scheme base) (chibi))
   (export get-environment-variable get-environment-variables
-          command-line exit)
+          command-line exit emergency-exit)
   (include "process.scm"))

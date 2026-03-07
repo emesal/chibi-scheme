@@ -1,14 +1,35 @@
 ;;; (tein process) — process context access
 ;;;
 ;;; get-environment-variable, get-environment-variables, command-line,
-;;; and exit are rust trampolines registered by the runtime.
+;;; and emergency-exit are rust trampolines registered by the runtime.
 ;;;
-;;; exit and emergency-exit: both have emergency-exit semantics — they
-;;; immediately return control to the rust host without running dynamic-wind
-;;; "after" thunks. r7rs exit should run those cleaners; that requires an
-;;; unwind continuation around evaluate(), which tein does not yet establish.
-;;; tracked in GH #101. a future standalone interpreter host can wrap
-;;; evaluate() to provide correct r7rs exit semantics.
+;;; exit: r7rs-compliant — unwinds dynamic-wind "after" thunks via
+;;; travel-to-point!, flushes and closes current output and error ports,
+;;; then delegates to emergency-exit (rust trampoline, immediate VM halt).
+;;;
+;;; emergency-exit: immediate halt — no dynamic-wind cleanup, no port
+;;; flushing. r7rs semantics.
 ;;;
 ;;; in sandboxed contexts, get-environment-variable returns #f,
 ;;; get-environment-variables returns '(), and command-line returns '("tein").
+
+;;; walk %dk chain to find the actual root point.
+;;; root-point from init-7.scm is NOT the same object as the actual %dk root
+;;; in tein's context (tein's env setup creates a fresh root with #f thunks).
+(define (%find-root point)
+  (let ((parent (vector-ref point 3)))
+    (if parent (%find-root parent) point)))
+
+(define %exit-root (%find-root (%dk)))
+
+(define (exit . args)
+  ;; unwind dynamic-wind "after" thunks (innermost first)
+  (travel-to-point! (%dk) %exit-root)
+  (%dk %exit-root)
+  ;; flush and close ports (r7rs: "flushes all ports ... then exits")
+  (flush-output-port (current-output-port))
+  (flush-output-port (current-error-port))
+  (close-output-port (current-output-port))
+  (close-output-port (current-error-port))
+  ;; delegate to rust trampoline for actual VM halt
+  (apply emergency-exit args))
