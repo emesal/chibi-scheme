@@ -1,4 +1,6 @@
-
 (define-library (scheme eval)
-  (import (chibi) (meta)) ; (chibi compiler analyze)
-  (export eval environment))
+  (import (chibi))
+  (export eval environment)
+  (begin
+    (define (environment . specs)
+      (apply tein-environment-internal specs))))
