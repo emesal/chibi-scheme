@@ -1,7 +1,7 @@
 (define-library (tein filesystem)
-  (import (scheme base))
+  (import (scheme base) (chibi))
   (export
-    ;; real implementations (rust trampolines)
+    ;; real implementations (rust trampolines overwrite scheme stubs at init)
     file-exists? delete-file
     file-directory? file-regular? file-link?
     file-size directory-files
