@@ -5,8 +5,8 @@
 ;;; happens at the C level in eval.c (patches F, G) via tein_fs_check_access.
 ;;; the FS policy gate is armed for sandboxed contexts; unsandboxed = allow all.
 ;;;
-;;; file-exists? and delete-file are rust trampolines registered by
-;;; register_file_module() in context.rs — they check IS_SANDBOXED + FsPolicy.
+;;; file-exists? and delete-file are imported from (tein filesystem) which
+;;; provides rust trampolines checking IS_SANDBOXED + FsPolicy.
 ;;;
 ;;; the 4 higher-order wrappers below call open-input-file / open-output-file.
 ;;; policy enforcement flows through the C-level opcode check.

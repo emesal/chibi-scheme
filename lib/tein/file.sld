@@ -1,5 +1,5 @@
 (define-library (tein file)
-  (import (chibi))
+  (import (chibi) (only (tein filesystem) file-exists? delete-file))
   (export file-exists? delete-file
           open-input-file open-binary-input-file
           open-output-file open-binary-output-file
