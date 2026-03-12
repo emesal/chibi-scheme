@@ -712,14 +712,17 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
             sexp name  = sexp_car(cell);
             sexp value = sexp_cdr(cell);
             sexp next  = sexp_env_next_cell(cell);
-            if (cell_n % 50 == 1) fprintf(stderr, "env_bindings cell %d symn=%d seen_pairp=%d\n", cell_n, sexp_symbolp(name), sexp_pairp(seen));
+            if (cell_n > 450) fprintf(stderr, "cell %d: symbolp=%d valuep=%d memq...", cell_n, sexp_symbolp(name), (int)(!!sexp_pointerp(value)));
 
             /* skip if already seen (innermost binding wins) */
             /* sexp_memq does not allocate */
             if (sexp_memq(ctx, name, seen) != SEXP_FALSE) {
+                if (cell_n > 450) fprintf(stderr, "skip\n");
                 cell = next;
                 continue;
             }
+            if (cell_n > 450) fprintf(stderr, "classify...");
+
 
             /* prefix filter: sexp_symbol_to_string allocates */
             if (sexp_stringp(prefix_root)) {
@@ -742,6 +745,7 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
             /* classify: tein_binding_kind interns a symbol — may allocate.
              * store in sym_str (gc-rooted) to survive subsequent allocs. */
             sym_str = tein_binding_kind(ctx, value);
+            if (cell_n > 450) fprintf(stderr, "classified. cons...");
 
             /* build (name . kind) entry and push onto result.
              * all sexp_cons calls can trigger GC — keep all live values in
@@ -752,9 +756,12 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
              *   4. clear sym_str              [no longer needed]
              */
             sym_str = sexp_cons(ctx, sexp_car(cell), sym_str); /* (name . kind) */
+            if (cell_n > 450) fprintf(stderr, "entry-cons done, result-cons...");
             result  = sexp_cons(ctx, sym_str, result);
+            if (cell_n > 450) fprintf(stderr, "result done, seen-cons...");
             seen    = sexp_cons(ctx, sexp_car(cell), seen);
             sym_str = SEXP_FALSE;
+            if (cell_n > 450) fprintf(stderr, "done\n");
 
             cell = sexp_env_next_cell(cell);
         }
