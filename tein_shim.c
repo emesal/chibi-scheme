@@ -765,7 +765,9 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
 
             cell = sexp_env_next_cell(cell);
         }
+        fprintf(stderr, "inner loop done, env_parent...\n");
         env = sexp_env_parent(env);
+        fprintf(stderr, "env_parent done, envp=%d\n", sexp_envp(env));
     }
 
     sexp_gc_release5(ctx);
