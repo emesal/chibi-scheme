@@ -703,28 +703,32 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
 
     sexp env = sexp_context_env(ctx);
     while (sexp_envp(env)) {
-        sexp bindings = sexp_env_bindings(env);
-        while (sexp_pairp(bindings)) {
-            cell = sexp_car(bindings);
+        /* env bindings are a linked list of (name . value) pairs where
+         * the next cell pointer is stored in sexp_env_next_cell (pair source),
+         * NOT in cdr. iterate with sexp_env_next_cell, not sexp_cdr. */
+        cell = sexp_env_bindings(env);
+        while (sexp_pairp(cell)) {
             sexp name = sexp_car(cell);
             sexp value = sexp_cdr(cell);
 
             /* skip if already seen (innermost wins) */
             if (sexp_memq(ctx, name, seen) != SEXP_FALSE) {
-                bindings = sexp_cdr(bindings);
+                cell = sexp_env_next_cell(cell);
                 continue;
             }
 
             /* prefix filter */
-            if (prefix_str) {
-                /* sexp_symbol_to_string may allocate — consume result
-                 * via sexp_string_data before next allocating call */
+            if (sexp_stringp(prefix_root)) {
+                /* re-read prefix pointer each iteration in case GC relocated it */
+                prefix_str = sexp_string_data(prefix_root);
+                prefix_len = sexp_string_size(prefix_root);
+                /* sexp_symbol_to_string allocates — read sym_data immediately */
                 sym_str = sexp_symbol_to_string(ctx, name);
                 const char *sym_data = sexp_string_data(sym_str);
                 sexp_uint_t sym_len = sexp_string_size(sym_str);
                 if (sym_len < prefix_len ||
                     memcmp(sym_data, prefix_str, prefix_len) != 0) {
-                    bindings = sexp_cdr(bindings);
+                    cell = sexp_env_next_cell(cell);
                     continue;
                 }
             }
@@ -736,7 +740,7 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
             result = sexp_cons(ctx, sexp_cons(ctx, name, kind_sym), result);
             seen = sexp_cons(ctx, name, seen);
 
-            bindings = sexp_cdr(bindings);
+            cell = sexp_env_next_cell(cell);
         }
         env = sexp_env_parent(env);
     }
