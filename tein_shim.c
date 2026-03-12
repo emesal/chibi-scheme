@@ -646,3 +646,136 @@ sexp tein_sexp_global_meta_env(sexp ctx) {
 sexp tein_sexp_make_immutable(sexp ctx, sexp x) {
     return sexp_make_immutable_op(ctx, NULL, 1, x);
 }
+
+/* --- (tein introspect) shims (#83) --- */
+
+/* procedure arity.
+ * returns cons(min, max) where max is SEXP_FALSE if variadic.
+ * returns SEXP_FALSE for non-procedures. */
+sexp tein_procedure_arity(sexp ctx, sexp proc) {
+    sexp_sint_t num_args;
+    int variadic;
+    if (sexp_procedurep(proc)) {
+        num_args = sexp_unbox_fixnum(sexp_procedure_num_args(proc));
+        variadic = sexp_procedure_variadic_p(proc);
+    } else if (sexp_opcodep(proc)) {
+        num_args = sexp_opcode_num_args(proc);
+        variadic = sexp_opcode_variadic_p(proc);
+    } else {
+        return SEXP_FALSE;
+    }
+    return sexp_cons(ctx,
+                     sexp_make_fixnum(num_args),
+                     variadic ? SEXP_FALSE : sexp_make_fixnum(num_args));
+}
+
+/* classify a binding value.
+ * returns an interned symbol: procedure, syntax, or variable. */
+sexp tein_binding_kind(sexp ctx, sexp value) {
+    if (sexp_procedurep(value) || sexp_opcodep(value)) {
+        return sexp_intern(ctx, "procedure", -1);
+    } else if (sexp_syntacticp(value)) {
+        return sexp_intern(ctx, "syntax", -1);
+    } else {
+        return sexp_intern(ctx, "variable", -1);
+    }
+}
+
+/* collect all bindings from env chain.
+ * walks sexp_env_bindings + parent chain. returns alist of (name . kind).
+ * if prefix is non-SEXP_FALSE, filters by string prefix on symbol name.
+ * deduplicates: innermost binding wins (seen list tracks visited symbols). */
+sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
+    sexp_gc_var6(result, seen, cell, kind_sym, sym_str, prefix_root);
+    sexp_gc_preserve6(ctx, result, seen, cell, kind_sym, sym_str, prefix_root);
+    prefix_root = prefix; /* root the prefix arg against GC */
+
+    result = SEXP_NULL;
+    seen = SEXP_NULL;
+
+    const char *prefix_str = NULL;
+    sexp_uint_t prefix_len = 0;
+    if (sexp_stringp(prefix_root)) {
+        prefix_str = sexp_string_data(prefix_root);
+        prefix_len = sexp_string_size(prefix_root);
+    }
+
+    sexp env = sexp_context_env(ctx);
+    while (sexp_envp(env)) {
+        sexp bindings = sexp_env_bindings(env);
+        while (sexp_pairp(bindings)) {
+            cell = sexp_car(bindings);
+            sexp name = sexp_car(cell);
+            sexp value = sexp_cdr(cell);
+
+            /* skip if already seen (innermost wins) */
+            if (sexp_memq(ctx, name, seen) != SEXP_FALSE) {
+                bindings = sexp_cdr(bindings);
+                continue;
+            }
+
+            /* prefix filter */
+            if (prefix_str) {
+                /* sexp_symbol_to_string may allocate — consume result
+                 * via sexp_string_data before next allocating call */
+                sym_str = sexp_symbol_to_string(ctx, name);
+                const char *sym_data = sexp_string_data(sym_str);
+                sexp_uint_t sym_len = sexp_string_size(sym_str);
+                if (sym_len < prefix_len ||
+                    memcmp(sym_data, prefix_str, prefix_len) != 0) {
+                    bindings = sexp_cdr(bindings);
+                    continue;
+                }
+            }
+
+            /* classify */
+            kind_sym = tein_binding_kind(ctx, value);
+
+            /* prepend (name . kind) to result, name to seen */
+            result = sexp_cons(ctx, sexp_cons(ctx, name, kind_sym), result);
+            seen = sexp_cons(ctx, name, seen);
+
+            bindings = sexp_cdr(bindings);
+        }
+        env = sexp_env_parent(env);
+    }
+
+    sexp_gc_release6(ctx);
+    return result;
+}
+
+/* list loaded modules.
+ * walks *modules* alist in meta env, returns names where module-env is non-#f.
+ * caller (rust wrapper) handles sandbox filtering. */
+sexp tein_imported_modules_list(sexp ctx) {
+    sexp_gc_var3(result, modules_sym, modules_alist);
+    sexp_gc_preserve3(ctx, result, modules_sym, modules_alist);
+
+    result = SEXP_NULL;
+
+    sexp meta_env = sexp_global(ctx, SEXP_G_META_ENV);
+    modules_sym = sexp_intern(ctx, "*modules*", -1);
+    modules_alist = sexp_env_ref(ctx, meta_env, modules_sym, SEXP_FALSE);
+
+    if (sexp_pairp(modules_alist)) {
+        sexp ls = modules_alist;
+        while (sexp_pairp(ls)) {
+            sexp entry = sexp_car(ls);
+            /* entry is (name . module-vector) */
+            if (sexp_pairp(entry)) {
+                sexp mod_vec = sexp_cdr(entry);
+                /* module-env is vector-ref 1 */
+                if (sexp_vectorp(mod_vec) &&
+                    sexp_vector_length(mod_vec) > 1 &&
+                    sexp_vector_ref(mod_vec, SEXP_ONE) != SEXP_FALSE) {
+                    sexp name = sexp_car(entry);
+                    result = sexp_cons(ctx, name, result);
+                }
+            }
+            ls = sexp_cdr(ls);
+        }
+    }
+
+    sexp_gc_release3(ctx);
+    return result;
+}
