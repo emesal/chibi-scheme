@@ -705,11 +705,14 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
          * the next-cell pointer is sexp_env_next_cell (pair source field),
          * NOT cdr. iterate with sexp_env_next_cell. */
         cell = sexp_env_bindings(env);
+        int cell_n = 0;
         while (sexp_pairp(cell)) {
+            cell_n++;
             /* recover name/value from the rooted cell after every alloc */
             sexp name  = sexp_car(cell);
             sexp value = sexp_cdr(cell);
             sexp next  = sexp_env_next_cell(cell);
+            if (cell_n % 50 == 1) fprintf(stderr, "env_bindings cell %d symn=%d seen_pairp=%d\n", cell_n, sexp_symbolp(name), sexp_pairp(seen));
 
             /* skip if already seen (innermost binding wins) */
             /* sexp_memq does not allocate */
