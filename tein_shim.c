@@ -700,23 +700,16 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
      * across GC (chibi uses a copying collector only for strings/bytevectors
      * via sexp_string_data — env/pair/symbol objects don't move). */
     sexp env = sexp_context_env(ctx);
-    int env_count = 0;
     while (sexp_envp(env)) {
-        env_count++;
         /* env bindings are a linked list of (name . value) pairs where
          * the next-cell pointer is sexp_env_next_cell (pair source field),
          * NOT cdr. iterate with sexp_env_next_cell. */
         cell = sexp_env_bindings(env);
-        int cell_count = 0;
         while (sexp_pairp(cell)) {
-            cell_count++;
             /* recover name/value from the rooted cell after every alloc */
             sexp name  = sexp_car(cell);
             sexp value = sexp_cdr(cell);
             sexp next  = sexp_env_next_cell(cell);
-            if (cell_count % 10 == 1 || cell_count > 450)
-                fprintf(stderr, "DEBUG env_bindings: env=%d cell=%d name_sym=%d next_pairp=%d\n",
-                    env_count, cell_count, sexp_symbolp(name), sexp_pairp(next));
 
             /* skip if already seen (innermost binding wins) */
             /* sexp_memq does not allocate */
@@ -743,14 +736,22 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
                 sym_str = SEXP_FALSE;
             }
 
-            /* classify: tein_binding_kind only interns a fixed symbol, no alloc */
-            sexp kind_sym = tein_binding_kind(ctx, value);
+            /* classify: tein_binding_kind interns a symbol — may allocate.
+             * store in sym_str (gc-rooted) to survive subsequent allocs. */
+            sym_str = tein_binding_kind(ctx, value);
 
-            /* prepend (name . kind) to result, name to seen.
-             * sexp_cons allocates — recover name from cell afterward. */
-            sexp entry = sexp_cons(ctx, sexp_car(cell), kind_sym);
-            result = sexp_cons(ctx, entry, result);
-            seen   = sexp_cons(ctx, sexp_car(cell), seen);
+            /* build (name . kind) entry and push onto result.
+             * all sexp_cons calls can trigger GC — keep all live values in
+             * gc-rooted vars. strategy:
+             *   1. sym_str = (name . kind)   [sym_str was kind, now reused as entry]
+             *   2. result  = (entry . result) [both rooted]
+             *   3. seen    = (name . seen)    [sexp_car(cell) recoverable from rooted cell]
+             *   4. clear sym_str              [no longer needed]
+             */
+            sym_str = sexp_cons(ctx, sexp_car(cell), sym_str); /* (name . kind) */
+            result  = sexp_cons(ctx, sym_str, result);
+            seen    = sexp_cons(ctx, sexp_car(cell), seen);
+            sym_str = SEXP_FALSE;
 
             cell = sexp_env_next_cell(cell);
         }
