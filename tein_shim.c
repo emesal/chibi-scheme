@@ -700,16 +700,22 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
      * across GC (chibi uses a copying collector only for strings/bytevectors
      * via sexp_string_data — env/pair/symbol objects don't move). */
     sexp env = sexp_context_env(ctx);
+    int env_count = 0;
     while (sexp_envp(env)) {
+        env_count++;
         /* env bindings are a linked list of (name . value) pairs where
          * the next-cell pointer is sexp_env_next_cell (pair source field),
          * NOT cdr. iterate with sexp_env_next_cell. */
         cell = sexp_env_bindings(env);
+        int cell_count = 0;
         while (sexp_pairp(cell)) {
+            cell_count++;
             /* recover name/value from the rooted cell after every alloc */
             sexp name  = sexp_car(cell);
             sexp value = sexp_cdr(cell);
             sexp next  = sexp_env_next_cell(cell);
+            if (cell_count % 100 == 1)
+                fprintf(stderr, "DEBUG env_bindings: env=%d cell=%d name_sym=%d\n", env_count, cell_count, sexp_symbolp(name));
 
             /* skip if already seen (innermost binding wins) */
             /* sexp_memq does not allocate */
