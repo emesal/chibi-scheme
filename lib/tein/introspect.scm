@@ -4,3 +4,5 @@
 ;;; procedure arity, and environment bindings.
 
 (define (available-modules) (tein-available-modules-internal))
+
+(define (module-exports mod-path) (tein-module-exports-internal mod-path))
