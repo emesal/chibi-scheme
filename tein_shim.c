@@ -687,65 +687,70 @@ sexp tein_binding_kind(sexp ctx, sexp value) {
  * if prefix is non-SEXP_FALSE, filters by string prefix on symbol name.
  * deduplicates: innermost binding wins (seen list tracks visited symbols). */
 sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
-    sexp_gc_var6(result, seen, cell, kind_sym, sym_str, prefix_root);
-    sexp_gc_preserve6(ctx, result, seen, cell, kind_sym, sym_str, prefix_root);
-    prefix_root = prefix; /* root the prefix arg against GC */
+    sexp_gc_var5(result, seen, cell, sym_str, prefix_root);
+    sexp_gc_preserve5(ctx, result, seen, cell, sym_str, prefix_root);
+    prefix_root = prefix;
 
     result = SEXP_NULL;
     seen = SEXP_NULL;
 
-    const char *prefix_str = NULL;
-    sexp_uint_t prefix_len = 0;
-    if (sexp_stringp(prefix_root)) {
-        prefix_str = sexp_string_data(prefix_root);
-        prefix_len = sexp_string_size(prefix_root);
-    }
-
+    /* walk env chain. env is a plain local — not GC-rooted. we re-read
+     * it from sexp_context_env / sexp_env_parent only at points where
+     * no allocation is pending. env pointers are heap objects and stable
+     * across GC (chibi uses a copying collector only for strings/bytevectors
+     * via sexp_string_data — env/pair/symbol objects don't move). */
     sexp env = sexp_context_env(ctx);
     while (sexp_envp(env)) {
         /* env bindings are a linked list of (name . value) pairs where
-         * the next cell pointer is stored in sexp_env_next_cell (pair source),
-         * NOT in cdr. iterate with sexp_env_next_cell, not sexp_cdr. */
+         * the next-cell pointer is sexp_env_next_cell (pair source field),
+         * NOT cdr. iterate with sexp_env_next_cell. */
         cell = sexp_env_bindings(env);
         while (sexp_pairp(cell)) {
-            sexp name = sexp_car(cell);
+            /* recover name/value from the rooted cell after every alloc */
+            sexp name  = sexp_car(cell);
             sexp value = sexp_cdr(cell);
+            sexp next  = sexp_env_next_cell(cell);
 
-            /* skip if already seen (innermost wins) */
+            /* skip if already seen (innermost binding wins) */
+            /* sexp_memq does not allocate */
             if (sexp_memq(ctx, name, seen) != SEXP_FALSE) {
-                cell = sexp_env_next_cell(cell);
+                cell = next;
                 continue;
             }
 
-            /* prefix filter */
+            /* prefix filter: sexp_symbol_to_string allocates */
             if (sexp_stringp(prefix_root)) {
-                /* re-read prefix pointer each iteration in case GC relocated it */
-                prefix_str = sexp_string_data(prefix_root);
-                prefix_len = sexp_string_size(prefix_root);
-                /* sexp_symbol_to_string allocates — read sym_data immediately */
                 sym_str = sexp_symbol_to_string(ctx, name);
+                /* re-read from rooted vars after allocation */
                 const char *sym_data = sexp_string_data(sym_str);
-                sexp_uint_t sym_len = sexp_string_size(sym_str);
-                if (sym_len < prefix_len ||
-                    memcmp(sym_data, prefix_str, prefix_len) != 0) {
+                sexp_uint_t sym_len  = sexp_string_size(sym_str);
+                const char *pfx_data = sexp_string_data(prefix_root);
+                sexp_uint_t pfx_len  = sexp_string_size(prefix_root);
+                if (sym_len < pfx_len ||
+                    memcmp(sym_data, pfx_data, pfx_len) != 0) {
+                    /* sym_str rooted but not needed further */
+                    sym_str = SEXP_FALSE;
                     cell = sexp_env_next_cell(cell);
                     continue;
                 }
+                sym_str = SEXP_FALSE;
             }
 
-            /* classify */
-            kind_sym = tein_binding_kind(ctx, value);
+            /* classify: tein_binding_kind only interns a fixed symbol, no alloc */
+            sexp kind_sym = tein_binding_kind(ctx, value);
 
-            /* prepend (name . kind) to result, name to seen */
-            result = sexp_cons(ctx, sexp_cons(ctx, name, kind_sym), result);
-            seen = sexp_cons(ctx, name, seen);
+            /* prepend (name . kind) to result, name to seen.
+             * sexp_cons allocates — recover name from cell afterward. */
+            sexp entry = sexp_cons(ctx, sexp_car(cell), kind_sym);
+            result = sexp_cons(ctx, entry, result);
+            seen   = sexp_cons(ctx, sexp_car(cell), seen);
 
             cell = sexp_env_next_cell(cell);
         }
         env = sexp_env_parent(env);
     }
 
-    sexp_gc_release6(ctx);
+    sexp_gc_release5(ctx);
     return result;
 }
 
