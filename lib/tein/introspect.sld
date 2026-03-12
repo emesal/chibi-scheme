@@ -1,8 +1,12 @@
 (define-library (tein introspect)
   (import (scheme base) (scheme write) (scheme eval) (chibi))
   (export available-modules
+          imported-modules
           module-exports
-          procedure-arity
           env-bindings
-          imported-modules)
+          binding-info
+          procedure-arity
+          describe-environment
+          describe-environment/text
+          introspect-docs)
   (include "introspect.scm"))
