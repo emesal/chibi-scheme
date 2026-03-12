@@ -687,24 +687,22 @@ sexp tein_binding_kind(sexp ctx, sexp value) {
  * if prefix is non-SEXP_FALSE, filters by string prefix on symbol name.
  * deduplicates: innermost binding wins (seen list tracks visited symbols). */
 sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
-    sexp_gc_var5(result, seen, cell, sym_str, prefix_root);
-    sexp_gc_preserve5(ctx, result, seen, cell, sym_str, prefix_root);
+    sexp_gc_var6(result, seen, cell, sym_str, prefix_root, env);
+    sexp_gc_preserve6(ctx, result, seen, cell, sym_str, prefix_root, env);
     prefix_root = prefix;
 
     result = SEXP_NULL;
     seen = SEXP_NULL;
 
-    /* walk env chain. env is a plain local — not GC-rooted. we re-read
-     * it from sexp_context_env / sexp_env_parent only at points where
-     * no allocation is pending. env pointers are heap objects and stable
-     * across GC (chibi uses a copying collector only for strings/bytevectors
-     * via sexp_string_data — env/pair/symbol objects don't move). */
-    sexp env = sexp_context_env(ctx);
+    /* walk env chain. env is GC-rooted so it survives allocations inside
+     * the inner loop (sexp_cons, sexp_symbol_to_string, tein_binding_kind). */
+    env = sexp_context_env(ctx);
     while (sexp_envp(env)) {
         /* env bindings are a linked list of (name . value) pairs where
          * the next-cell pointer is sexp_env_next_cell (pair source field),
          * NOT cdr. iterate with sexp_env_next_cell. */
         cell = sexp_env_bindings(env);
+        int cell_n = 0;
         int cell_n = 0;
         while (sexp_pairp(cell)) {
             cell_n++;
@@ -712,17 +710,13 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
             sexp name  = sexp_car(cell);
             sexp value = sexp_cdr(cell);
             sexp next  = sexp_env_next_cell(cell);
-            if (cell_n > 450) fprintf(stderr, "cell %d: symbolp=%d valuep=%d memq...", cell_n, sexp_symbolp(name), (int)(!!sexp_pointerp(value)));
 
             /* skip if already seen (innermost binding wins) */
             /* sexp_memq does not allocate */
             if (sexp_memq(ctx, name, seen) != SEXP_FALSE) {
-                if (cell_n > 450) fprintf(stderr, "skip\n");
                 cell = next;
                 continue;
             }
-            if (cell_n > 450) fprintf(stderr, "classify...");
-
 
             /* prefix filter: sexp_symbol_to_string allocates */
             if (sexp_stringp(prefix_root)) {
@@ -734,7 +728,6 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
                 sexp_uint_t pfx_len  = sexp_string_size(prefix_root);
                 if (sym_len < pfx_len ||
                     memcmp(sym_data, pfx_data, pfx_len) != 0) {
-                    /* sym_str rooted but not needed further */
                     sym_str = SEXP_FALSE;
                     cell = sexp_env_next_cell(cell);
                     continue;
@@ -745,32 +738,26 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
             /* classify: tein_binding_kind interns a symbol — may allocate.
              * store in sym_str (gc-rooted) to survive subsequent allocs. */
             sym_str = tein_binding_kind(ctx, value);
-            if (cell_n > 450) fprintf(stderr, "classified. cons...");
 
             /* build (name . kind) entry and push onto result.
              * all sexp_cons calls can trigger GC — keep all live values in
              * gc-rooted vars. strategy:
-             *   1. sym_str = (name . kind)   [sym_str was kind, now reused as entry]
+             *   1. sym_str = (name . kind)   [sym_str was kind, reused as entry]
              *   2. result  = (entry . result) [both rooted]
              *   3. seen    = (name . seen)    [sexp_car(cell) recoverable from rooted cell]
              *   4. clear sym_str              [no longer needed]
              */
             sym_str = sexp_cons(ctx, sexp_car(cell), sym_str); /* (name . kind) */
-            if (cell_n > 450) fprintf(stderr, "entry-cons done, result-cons...");
             result  = sexp_cons(ctx, sym_str, result);
-            if (cell_n > 450) fprintf(stderr, "result done, seen-cons...");
             seen    = sexp_cons(ctx, sexp_car(cell), seen);
             sym_str = SEXP_FALSE;
-            if (cell_n > 450) fprintf(stderr, "done\n");
 
             cell = sexp_env_next_cell(cell);
         }
-        fprintf(stderr, "inner loop done, env_parent...\n");
         env = sexp_env_parent(env);
-        fprintf(stderr, "env_parent done, envp=%d\n", sexp_envp(env));
     }
 
-    sexp_gc_release5(ctx);
+    sexp_gc_release6(ctx);
     return result;
 }
 
