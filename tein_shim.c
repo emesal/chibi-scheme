@@ -695,9 +695,12 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
     seen = SEXP_NULL;
 
     /* walk env chain. env is GC-rooted so it survives allocations inside
-     * the inner loop (sexp_cons, sexp_symbol_to_string, tein_binding_kind). */
+     * the inner loop (sexp_cons, sexp_symbol_to_string, tein_binding_kind).
+     * null-check env first: some root envs have a C NULL parent (not SEXP_FALSE),
+     * and sexp_pointerp(NULL)==true (SEXP_POINTER_TAG=0), so sexp_envp(NULL)
+     * would deref NULL. cf. eval.c line 731. */
     env = sexp_context_env(ctx);
-    while (sexp_envp(env)) {
+    while (env && sexp_envp(env)) {
         /* env bindings are a linked list of (name . value) pairs where
          * the next-cell pointer is sexp_env_next_cell (pair source field),
          * NOT cdr. iterate with sexp_env_next_cell. */
