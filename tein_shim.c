@@ -714,7 +714,7 @@ sexp tein_env_bindings_list(sexp ctx, sexp prefix) {
             sexp name  = sexp_car(cell);
             sexp value = sexp_cdr(cell);
             sexp next  = sexp_env_next_cell(cell);
-            if (cell_count % 100 == 1)
+            if (cell_count % 10 == 1)
                 fprintf(stderr, "DEBUG env_bindings: env=%d cell=%d name_sym=%d\n", env_count, cell_count, sexp_symbolp(name));
 
             /* skip if already seen (innermost binding wins) */
