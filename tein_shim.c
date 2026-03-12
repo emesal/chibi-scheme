@@ -656,7 +656,8 @@ sexp tein_procedure_arity(sexp ctx, sexp proc) {
     sexp_sint_t num_args;
     int variadic;
     if (sexp_procedurep(proc)) {
-        num_args = sexp_unbox_fixnum(sexp_procedure_num_args(proc));
+        /* sexp_procedure_num_args stores a raw short, not a boxed fixnum */
+        num_args = (sexp_sint_t) sexp_procedure_num_args(proc);
         variadic = sexp_procedure_variadic_p(proc);
     } else if (sexp_opcodep(proc)) {
         num_args = sexp_opcode_num_args(proc);
