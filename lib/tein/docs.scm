@@ -15,15 +15,22 @@
       (else (loop (cdr rest) (cons (car rest) acc))))))
 
 (define (describe alist)
-  (let ((mod (module-doc alist '__module__))
-        (entries (module-docs alist)))
-    (apply string-append
-      (append
-        (if mod (list "(" mod ")\n") '())
-        (map (lambda (p)
-               (string-append
-                 "  " (symbol->string (car p))
-                 (if (string=? (cdr p) "")
-                     "\n"
-                     (string-append " — " (cdr p) "\n"))))
-             entries)))))
+  (if (not (pair? alist))
+      (string-append
+        "error: describe expects a docs alist (e.g. introspect-docs, harness-tools-docs), got: "
+        (if (symbol? alist)
+            (string-append "symbol '" (symbol->string alist)
+              " — did you mean (describe " (symbol->string alist) "-docs)?")
+            "a non-list value"))
+      (let ((mod (module-doc alist '__module__))
+            (entries (module-docs alist)))
+        (apply string-append
+          (append
+            (if mod (list "(" mod ")\n") '())
+            (map (lambda (p)
+                   (string-append
+                     "  " (symbol->string (car p))
+                     (if (string=? (cdr p) "")
+                         "\n"
+                         (string-append " — " (cdr p) "\n"))))
+                 entries))))))
